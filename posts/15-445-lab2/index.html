@@ -14,17 +14,17 @@
 <meta name="twitter:card" content="summary"/>
 <meta name="twitter:title" content="15-445-lab2:Buffer Pool Manager"/>
 <meta name="twitter:description" content="这个项目的目标是为BusTubDBMS构建一个面向磁盘的存储引擎。存储引擎假设数据库的基本存储位置位于磁盘上。"/>
-<script src="https://songrui625.github.io/js/feather.min.js"></script>
+<script src="https://songrui625.github.iojs/feather.min.js"></script>
 	
-	<link href="https://songrui625.github.io/css/fonts.css" rel="stylesheet">
+	<link href="https://songrui625.github.iocss/fonts.css" rel="stylesheet">
 	
-	<link rel="stylesheet" type="text/css" media="screen" href="https://songrui625.github.io/css/main.css" />
+	<link rel="stylesheet" type="text/css" media="screen" href="https://songrui625.github.iocss/main.css" />
 	
 </head>
 <body>
         <div class="content"><header>
 	<div class="main">
-		<a href="https://songrui625.github.io/">越今朝</a>
+		<a href="https://songrui625.github.io">越今朝</a>
 	</div>
 	<nav>
 		
@@ -123,12 +123,14 @@
 释放不用的内存。</p>
 <p><strong>改进</strong> 使用智能指针而不是原始指针可以避免这种pitfalls。</p>
 <h2 id="task-2---buffer-pool-manager">TASK #2 - Buffer Pool Manager</h2>
-<h4 id="内存安全问题">内存安全问题</h4>
-<p>在autograde上遇到了memory safety问题：</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#f92672">/</span>autograder<span style="color:#f92672">/</span>bustub<span style="color:#f92672">/</span>test<span style="color:#f92672">/</span>buffer<span style="color:#f92672">/</span>grading_buffer_pool_manager_concurrency_test.cpp:<span style="color:#ae81ff">300</span><span style="color:#f92672">:</span> Failure
+<h4 id="开发中遇到的问题">开发中遇到的问题</h4>
+<ul>
+<li>在autograde上遇到了memory safety问题：</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
 Expected equality of these values:
   <span style="color:#ae81ff">1</span>
-  bpm<span style="color:#f92672">-&gt;</span>DeletePage(temp_page_id, nullptr)
+  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
     Which is: false
 </code></pre></div><p>这问题其实出在<code>UnpinPageImpl(page_id_t page_id, bool is_dirty)</code>中:</p>
 <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++">  replacer_<span style="color:#f92672">-&gt;</span>Unpin(target_frame_id);
@@ -142,7 +144,44 @@ Expected equality of these values:
   }
   <span style="color:#75715e">// then we could Unpin the frame
 </span><span style="color:#75715e"></span>  replacer_<span style="color:#f92672">-&gt;</span>Unpin(target_frame_id);
-</code></pre></div><p>其次，当我们删除一个</p>
+</code></pre></div><ul>
+<li>在project2中的<code>BufferPoolManagerConcurrencyTest</code>中遇到了内存安全问题.</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
+Expected equality of these values:
+  <span style="color:#ae81ff">1</span>
+  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
+    Which is: false
+/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:311: Failure
+Expected equality of these values:
+  <span style="color:#ae81ff">1</span>
+  bpm-&gt;UnpinPage<span style="color:#f92672">(</span>page_ids<span style="color:#f92672">[</span>j<span style="color:#f92672">]</span>, false, nullptr<span style="color:#f92672">)</span>
+    Which is: false
+/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
+Expected equality of these values:
+  <span style="color:#ae81ff">1</span>
+  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
+    Which is: false
+/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
+Expected equality of these values:
+  <span style="color:#ae81ff">1</span>
+  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
+    Which is: false
+/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:311: Failure
+Expected equality of these values:
+  <span style="color:#ae81ff">1</span>
+  bpm-&gt;UnpinPage<span style="color:#f92672">(</span>page_ids<span style="color:#f92672">[</span>j<span style="color:#f92672">]</span>, false, nullptr<span style="color:#f92672">)</span>
+    Which is: false
+</code></pre></div><p>由于报错发生在<code>DeleltePageImplt()</code>和<code>UnpinPageImpl()</code>，而且在调用<code>DeletePageImpl()</code>之前会先调用<code>UnpinPageImpl()</code>，所以先去查看<code>UnpinPageImpl()</code>实现有没有问题。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++">p<span style="color:#f92672">-&gt;</span>pin_count <span style="color:#f92672">-=</span> <span style="color:#ae81ff">1</span>;
+replacer<span style="color:#f92672">-&gt;</span>Unpin(target_frame_id);
+</code></pre></div><p>发现问题在这，由于可能存在多个线程并发访问page，我们不能直接调用<code>replacer-&gt;Unpin()</code>,因为可能还存在别的线程正在使用这个page，所以当不存在任何一个线程使用这个page的时候，即引用计数为0时，我们才能调用<code>replacer-&gt;Unpin()</code></p>
+<ul>
+<li>何时调用<code>replacer-&gt;Pin()</code>?<br>
+我理解应该在两处调用<code>repalcer-&gt;Pin()</code>，一处是<code>FetchPageImpl()</code>，另一处是<code>NewPageImpl()</code>。<br>
+1、调用<code>FetchPageImpl()</code>，代表至少有一个线程要使用目标页面，那么目标页面所在的frame必须被钉住，状态改变为<code>pinned</code>,并且从replacer中移除。<br>
+2、调用<code>NewPageImpl()</code>同理。</li>
+</ul>
 		</section>
 
 		<div class="post-tags">
