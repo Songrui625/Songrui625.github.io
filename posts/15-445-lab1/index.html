@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html><head>
+	<meta charset="utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge"><title>15-445-lab1:Buffer Pool Manager - Jerry Ray</title><meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<meta property="og:image" content=""/>
+	<meta property="og:title" content="15-445-lab1:Buffer Pool Manager" />
+<meta property="og:description" content="这个项目的目标是为BusTubDBMS构建一个面向磁盘的存储引擎。存储引擎假设数据库的基本存储位置位于磁盘上。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://songrui625.github.io/posts/15-445-lab1/" /><meta property="article:section" content="posts" />
+
+
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="15-445-lab1:Buffer Pool Manager"/>
+<meta name="twitter:description" content="这个项目的目标是为BusTubDBMS构建一个面向磁盘的存储引擎。存储引擎假设数据库的基本存储位置位于磁盘上。"/>
+<script src="https://songrui625.github.iojs/feather.min.js"></script>
+	
+	<link href="https://songrui625.github.iocss/fonts.css" rel="stylesheet">
+	
+	<link rel="stylesheet" type="text/css" media="screen" href="https://songrui625.github.iocss/main.css" />
+	
+</head>
+<body>
+        <div class="content"><header>
+	<div class="main">
+		<a href="https://songrui625.github.io">Jerry Ray</a>
+	</div>
+	<nav>
+		
+		<a href="/">Home</a>
+		
+		<a href="/posts">All posts</a>
+		
+		<a href="/about">About</a>
+		
+		<a href="/tags">Tags</a>
+		
+	</nav>
+</header>
+
+<main>
+	<article>
+		<div class="title">
+			<h1 class="title">15-445-lab1:Buffer Pool Manager</h1>
+			<div class="meta">Posted on Jan 1, 0001</div>
+		</div>
+		
+
+		<section class="body">
+			<p>这个项目的目标是为<a href="https://github.com/cmu-db/bustub">BusTub</a>DBMS构建一个面向磁盘的存储引擎。存储引擎假设数据库的基本存储位置位于磁盘上。</p>
+<p>第一个实验是的我们的存储引擎中实现一个<code>buffer pool</code>(也可以叫<code>buffer cache</code>)。这个缓冲池负责在主存和磁盘之间来回移动物理页。它允许DBMS支持大于系统可用内存量的数据库。缓冲池的操作对于系统的其他部分是透明的。例如，系统使用它的唯一标识符<code>page_id_t</code>向缓冲池申请一页物理页使用并且它不知道这页物理页是否已经存在于内存中或者系统是否需要去磁盘检索这页物理页。</p>
+<p><strong>我们的实现必须是线程安全的</strong>。多个线程可能会同时访问内部数据结构，因此，我们需要确保使用<code>latches</code>(在操作系统中叫做<code>locks</code>)保护临界区。</p>
+<p>我们需要在存储引擎实现以下两个组件：</p>
+<ul>
+<li><code>LRU Replacement Policy</code></li>
+<li><code>Buffer Pool Manager</code></li>
+</ul>
+<h2 id="project-specification">PROJECT SPECIFICATION</h2>
+<p>对于以下每一个组件，助教已经提供了包含我们需要实现API的class框架。我们不能修改已经定义好的函数签名，否则测试框架将会失效。我们不能添加额外的class，这些组件都是自成体系的。</p>
+<p>如果一个类已经包含数据成员，我们不能将它们删掉。例如，<code>BufferPoolManager</code>包含<code>DiskManager</code>和<code>Replacer</code>对象。这是我们在系统的剩余部分需要实现的功能。<br>
+换句话说，你可能需要为这些类添加数据成员以正确实现所需功能。我们可以在这些类中添加额外的辅助函数。</p>
+<p>除非另有说明，我们可以在项目中使用任何内置的C++17容器。但是这些容器不是线程安全的，我们需要自己在实现中添加latch来保护。</p>
+<h2 id="task-1---lru-replacement-policy">TASK #1 - LRU REPLACEMENT POLICY</h2>
+<p>这个组件负责跟踪缓冲池中页面的使用情况。我们需要实现一个叫做<code>LRUReplacer</code>的新子类，它位于<code>src/include/buffer/lru_replacer.h</code>，相应的实现位于<code>src/buffer/lru_replacer.cpp</code>中。<code>LRUReplacer</code>继承于抽象<code>Replacer</code>类(<code>src/include/buffer/replacer.h</code>)，包含了指定的函数。</p>
+<p><code>LRUReplacer</code>的大小和缓冲池一样因为它为<code>BufferPoolManager</code>中的所有<code>frame</code>提供了占位符。然而，并非所有的<code>frames</code>都被视为<code>LRUReplacer</code>中的<code>frame</code>。<code>LRUReplacer</code>初始化时没有<code>frame</code>。然后，只有新的<code>unpinned</code>的那些才会被认为在<code>LRUReplacer</code>中。</p>
+<p>我们需要实现在课堂上讨论的LRU策略，需要实现下面的方法：</p>
+<ul>
+<li>
+<p><code>Victim(T*)</code>: 移除相对于所有由<code>LRUReplacer</code>跟踪的最近最少访问的那些元素，在输出参数中存储它的内容并且返回<code>True</code>。如果<code>Replacer</code>为空则返回<code>False</code>。</p>
+</li>
+<li>
+<p><code>Pin(T)</code>: 这个方法应该在<code>BufferPoolManager</code>中一个页面被固定到一个frame后调用。它应该从<code>LRUReplacer</code>中移除包含着<code>pinned</code>页的帧。</p>
+</li>
+<li>
+<p><code>Unpin(T)</code>: 这个方法应该在<code>pin_count</code>为0时调用。这个方法向<code>LRUReplacer</code>中添加包含着<code>unpinned</code>页的frame。</p>
+</li>
+<li>
+<p><code>Size()</code>: 这个方法返回当前处于<code>LRUReplacer</code>中的frame数目。</p>
+</li>
+</ul>
+<p>我们可以自由选择STL容器，我们可以假设不会超过内存但<strong>必须确保操作是线程安全</strong>的。</p>
+<h4 id="implementation-details">Implementation Details</h4>
+<ul>
+<li>什么是<code>frame</code>，什么是<code>page</code>？它们有什么关系？<br>
+内存区域可以看成是一个固定大小的<code>page</code>数组。我们把数组的每一项都叫做<code>frame</code>：页框。<br>
+而磁盘上的被划分为固定大小单元来组织，这个单元叫做<code>page</code>：页面。<br>
+当DBMS请求磁盘上的一个页面时，这个<code>page</code>就会被精确拷贝到一个<code>frame</code>中。具体拷贝到哪个<code>frame</code>视情况而定，而不是按照顺序。page id为1的<code>page</code>不一定拷贝到frame id为1的<code>frame</code>。</li>
+</ul>
+<h4 id="implementation-issue">Implementation Issue</h4>
+<p>整体思路就是就是<code>双链表</code> + <code>hash</code>.KV对就是&lt;frame_id_t, DLinkedNode&gt;，链表结点中存储的值是key。也就是说，key和value是相等的，不过为了换取更高的访问速度，所以选择用双链表结点进行封装。</p>
+<p>但是实现时还是会有一些问题：</p>
+<ul>
+<li><code>frame</code>的<code>unpinned</code>和<code>pinned</code>状态代表什么？</li>
+</ul>
+<p>一个<code>frame</code>状态为<code>unpinned</code>代表这个<code>frame</code>目前没有被任何一个thread所读写，<code>pinned</code>代表这个<code>frame</code>目前至少被一个thread所读写。</p>
+<ul>
+<li>为什么LRUReplacer提供的接口和OJ上的接口区别那么大？</li>
+</ul>
+<p>LRUReplacer追踪的是最近被访问过的<code>frame</code>。数据库中的LRU和OJ上的LRU所要考虑的有些不同，OJ上的LRU提供了两个接口<code>ValueType get(KeyType key)</code>和<code>void put(KeyType key, ValueType value)</code>。
+为什么项目中没有这两个接口？虽然我们有<code>Victim(T*)</code>，能拿到最近最少访问的frame并从LRU中evict掉，为什么不能get到其他frame？这是因为在数据库中我们需要考虑<code>Temporal Locality</code>，相对于其他
+<code>frame</code>，最近最少访问的<code>frame</code>将来很大概率不会被再次访问，所以我们可以evict掉。而其他<code>frame</code>因为<code>Temporal Locality</code>可能很快会被再次访问。</p>
+<ul>
+<li>为什么<code>Pin(T)</code>要从<code>LRUReplacer</code>中移除<code>pinned</code>状态的<code>frame</code>？</li>
+</ul>
+<p>当一个<code>frame</code>为<code>pinned</code>时，说明这页<code>frame</code>上的<code>page</code>正在被某一个线程所读写，此时它的<code>pin_count</code>一定大于0，我们需要在线程结束使用它后，将这页<code>frame</code>加入到LRU中，因为它刚刚被某一线程所读写。</p>
+<p>但是我们无法在<code>Pin(T)</code>函数中判断这页<code>frame</code>是否已经结束使用，所以我们得先把它从LRUReplacer中移除，随后<code>frame</code>结束使用的时候<code>一定会</code>调用<code>Unpin(T)</code>，这时候我们再把它加入到<code>LRUReplacer</code>中。
+这就是为什么我们还需要<code>Unpin(T)</code>函数的原因。这相当于OJ上LRU的<code>put(KeyType key, ValueType value)</code>中key已经存在的情况，而我们需要对<code>value</code>进行一个update操作，这个操作就相当于(1)在LRU中把这
+个元素移除，然后update它的value，(2)更新结束(线程不再读写这个结点)，然后加入到LRU中。OJ上的LRU并不是<code>thread-safe</code>的，单线程说明我们可以直接在LRU中更新对应结点的值，只在<code>put()</code>中就可以单独实现。
+但在实际数据库系统中不可以这样，因为会涉及到多个线程并发读写某一页<code>frame</code>的情况，如果写在一个<code>put</code>中，首先会增加了耦合性，LRU和其他模块应该尽可能地独立，其次也不好保护临界区地访问。</p>
+<p>所以说，将<code>put()</code>拆成<code>Pin()</code>和<code>Unpin()</code>其实是一个十分良好的设计。</p>
+<ul>
+<li>为什么<code>Unpin(T)</code>需要向LRU中添加<code>unpinned</code>页的<code>frame</code>？</li>
+</ul>
+<p>具体看上条。</p>
+<ul>
+<li>在<code>Unpin(T)</code>中为什么LRU中已经存在<code>frame</code>时，什么都不用做直接返回，而不是添加到LRU尾部，表示最近被访问？</li>
+</ul>
+<p>因为在LRU中的<code>frame</code>表示之前已经被线程访问过了，并且到目前操作为止都没有被线程访问过，因为如果需要被线程读写，一定会被evict掉。所以frame没有最近被再次访问，更不用说什么添加到链表尾部。</p>
+<h4 id="内存泄漏">内存泄漏</h4>
+<p>我们知道在CPP中手动管理内存是十分危险的，如果使用了<code>new</code>关键字，一定需要和一个<code>delete</code>关键字匹配，如果没有可能会发生内存泄漏。</p>
+<p>在<code>Unpin()</code>函数中，我们需要向<code>LRURepalcer</code>添加一个结点，会涉及到<code>new</code>关键字，那么什么时候需要delete呢？就是我们在调用<code>Pin()</code>函数的时候，我们需要在<code>LRUReplacer</code>中移除一个结点的时候使用<code>delete</code>关键字
+释放不用的内存。</p>
+<p><strong>改进</strong> 使用智能指针而不是原始指针可以避免这种pitfalls。</p>
+<h2 id="task-2---buffer-pool-manager">TASK #2 - Buffer Pool Manager</h2>
+<h4 id="开发中遇到的问题">开发中遇到的问题</h4>
+<ul>
+<li>在autograde上遇到了memory safety问题：</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
+Expected equality of these values:
+  <span style="color:#ae81ff">1</span>
+  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
+    Which is: false
+</code></pre></div><p>这问题其实出在<code>UnpinPageImpl(page_id_t page_id, bool is_dirty)</code>中:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++">  replacer_<span style="color:#f92672">-&gt;</span>Unpin(target_frame_id);
+  <span style="color:#66d9ef">if</span> (p<span style="color:#f92672">-&gt;</span>GetPinCount() <span style="color:#f92672">&lt;=</span> <span style="color:#ae81ff">0</span>) {
+    <span style="color:#66d9ef">return</span> false;
+  }
+</code></pre></div><p>这样写其实是有问题了，如果page本身的pin_count小于等于0，那么unpin后，它就会等于-1,这是未定义的行为，我们需要交换下这两个语句的顺序。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++">  <span style="color:#75715e">// before unpin the frame, checkout the pin count first.
+</span><span style="color:#75715e"></span>  <span style="color:#66d9ef">if</span> (p<span style="color:#f92672">-&gt;</span>GetPinCount() <span style="color:#f92672">&lt;=</span> <span style="color:#ae81ff">0</span>) {
+    <span style="color:#66d9ef">return</span> false;
+  }
+  <span style="color:#75715e">// then we could Unpin the frame
+</span><span style="color:#75715e"></span>  replacer_<span style="color:#f92672">-&gt;</span>Unpin(target_frame_id);
+</code></pre></div><ul>
+<li>在project2中的<code>BufferPoolManagerConcurrencyTest</code>中遇到了内存安全问题.</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
+Expected equality of these values:
+  <span style="color:#ae81ff">1</span>
+  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
+    Which is: false
+/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:311: Failure
+Expected equality of these values:
+  <span style="color:#ae81ff">1</span>
+  bpm-&gt;UnpinPage<span style="color:#f92672">(</span>page_ids<span style="color:#f92672">[</span>j<span style="color:#f92672">]</span>, false, nullptr<span style="color:#f92672">)</span>
+    Which is: false
+/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
+Expected equality of these values:
+  <span style="color:#ae81ff">1</span>
+  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
+    Which is: false
+/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
+Expected equality of these values:
+  <span style="color:#ae81ff">1</span>
+  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
+    Which is: false
+/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:311: Failure
+Expected equality of these values:
+  <span style="color:#ae81ff">1</span>
+  bpm-&gt;UnpinPage<span style="color:#f92672">(</span>page_ids<span style="color:#f92672">[</span>j<span style="color:#f92672">]</span>, false, nullptr<span style="color:#f92672">)</span>
+    Which is: false
+</code></pre></div><p>由于报错发生在<code>DeleltePageImplt()</code>和<code>UnpinPageImpl()</code>，而且在调用<code>DeletePageImpl()</code>之前会先调用<code>UnpinPageImpl()</code>，所以先去查看<code>UnpinPageImpl()</code>实现有没有问题。</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++">p<span style="color:#f92672">-&gt;</span>pin_count <span style="color:#f92672">-=</span> <span style="color:#ae81ff">1</span>;
+replacer<span style="color:#f92672">-&gt;</span>Unpin(target_frame_id);
+</code></pre></div><p>发现问题在这，由于可能存在多个线程并发访问page，我们不能直接调用<code>replacer-&gt;Unpin()</code>,因为可能还存在别的线程正在使用这个page，所以当不存在任何一个线程使用这个page的时候，即引用计数为0时，我们才能调用<code>replacer-&gt;Unpin()</code></p>
+<ul>
+<li>何时调用<code>replacer-&gt;Pin()</code>?<br>
+我理解应该在两处调用<code>repalcer-&gt;Pin()</code>，一处是<code>FetchPageImpl()</code>，另一处是<code>NewPageImpl()</code>。<br>
+1、调用<code>FetchPageImpl()</code>，代表至少有一个线程要使用目标页面，那么目标页面所在的frame必须被钉住，状态改变为<code>pinned</code>,并且从replacer中移除。<br>
+2、调用<code>NewPageImpl()</code>同理。</li>
+</ul>
+		</section>
+
+		<div class="post-tags">
+			
+			
+			
+		</div>
+	</article>
+</main>
+<footer>
+<hr><a class="soc" href="https://github.com/songrui625/" title="GitHub"><i data-feather="github"></i></a>|⚡️
+	2021  © Song Rui |  <a href="https://github.com/athul/archie">Archie Theme</a> | Built with <a href="https://gohugo.io">Hugo</a>
+</footer>
+
+
+<script>
+      feather.replace()
+</script></div>
+    </body>
+</html>

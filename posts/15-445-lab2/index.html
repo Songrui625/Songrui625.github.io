@@ -1,30 +1,30 @@
 <!DOCTYPE html>
 <html><head>
 	<meta charset="utf-8" />
-	<meta http-equiv="X-UA-Compatible" content="IE=edge"><title>15-445-lab2:Buffer Pool Manager - Jerry Ray</title><meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge"><title>15-445-lab2:B&#43; Tree - Jerry Ray</title><meta name="viewport" content="width=device-width, initial-scale=1">
 
 	<meta property="og:image" content=""/>
-	<meta property="og:title" content="15-445-lab2:Buffer Pool Manager" />
-<meta property="og:description" content="这个项目的目标是为BusTubDBMS构建一个面向磁盘的存储引擎。存储引擎假设数据库的基本存储位置位于磁盘上。" />
+	<meta property="og:title" content="15-445-lab2:B&#43; Tree" />
+<meta property="og:description" content="本次编程项目的是在我们的数据库系统中实现索引。索引负责快速检索数据，有了索引，我们就不必在数据库表中扫描每一行，索引为有序记录的快速随机查找和高校访问提供了保证。" />
 <meta property="og:type" content="article" />
 <meta property="og:url" content="https://songrui625.github.io/posts/15-445-lab2/" /><meta property="article:section" content="posts" />
-
-
+<meta property="article:published_time" content="2021-05-18T13:31:42&#43;08:00" />
+<meta property="article:modified_time" content="2021-05-18T13:31:42&#43;08:00" />
 
 <meta name="twitter:card" content="summary"/>
-<meta name="twitter:title" content="15-445-lab2:Buffer Pool Manager"/>
-<meta name="twitter:description" content="这个项目的目标是为BusTubDBMS构建一个面向磁盘的存储引擎。存储引擎假设数据库的基本存储位置位于磁盘上。"/>
-<script src="https://songrui625.github.io/js/feather.min.js"></script>
+<meta name="twitter:title" content="15-445-lab2:B&#43; Tree"/>
+<meta name="twitter:description" content="本次编程项目的是在我们的数据库系统中实现索引。索引负责快速检索数据，有了索引，我们就不必在数据库表中扫描每一行，索引为有序记录的快速随机查找和高校访问提供了保证。"/>
+<script src="https://songrui625.github.iojs/feather.min.js"></script>
 	
-	<link href="https://songrui625.github.io/css/fonts.css" rel="stylesheet">
+	<link href="https://songrui625.github.iocss/fonts.css" rel="stylesheet">
 	
-	<link rel="stylesheet" type="text/css" media="screen" href="https://songrui625.github.io/css/main.css" />
+	<link rel="stylesheet" type="text/css" media="screen" href="https://songrui625.github.iocss/main.css" />
 	
 </head>
 <body>
         <div class="content"><header>
 	<div class="main">
-		<a href="https://songrui625.github.io/">Jerry Ray</a>
+		<a href="https://songrui625.github.io">Jerry Ray</a>
 	</div>
 	<nav>
 		
@@ -42,146 +42,103 @@
 <main>
 	<article>
 		<div class="title">
-			<h1 class="title">15-445-lab2:Buffer Pool Manager</h1>
-			<div class="meta">Posted on Jan 1, 0001</div>
+			<h1 class="title">15-445-lab2:B&#43; Tree</h1>
+			<div class="meta">Posted on May 18, 2021</div>
 		</div>
 		
 
 		<section class="body">
-			<p>这个项目的目标是为<a href="https://github.com/cmu-db/bustub">BusTub</a>DBMS构建一个面向磁盘的存储引擎。存储引擎假设数据库的基本存储位置位于磁盘上。</p>
-<p>第一个实验是的我们的存储引擎中实现一个<code>buffer pool</code>(也可以叫<code>buffer cache</code>)。这个缓冲池负责在主存和磁盘之间来回移动物理页。它允许DBMS支持大于系统可用内存量的数据库。缓冲池的操作对于系统的其他部分是透明的。例如，系统使用它的唯一标识符<code>page_id_t</code>向缓冲池申请一页物理页使用并且它不知道这页物理页是否已经存在于内存中或者系统是否需要去磁盘检索这页物理页。</p>
-<p><strong>我们的实现必须是线程安全的</strong>。多个线程可能会同时访问内部数据结构，因此，我们需要确保使用<code>latches</code>(在操作系统中叫做<code>locks</code>)保护临界区。</p>
-<p>我们需要在存储引擎实现以下两个组件：</p>
-<ul>
-<li><code>LRU Replacement Policy</code></li>
-<li><code>Buffer Pool Manager</code></li>
-</ul>
-<h2 id="project-specification">PROJECT SPECIFICATION</h2>
-<p>对于以下每一个组件，助教已经提供了包含我们需要实现API的class框架。我们不能修改已经定义好的函数签名，否则测试框架将会失效。我们不能添加额外的class，这些组件都是自成体系的。</p>
-<p>如果一个类已经包含数据成员，我们不能将它们删掉。例如，<code>BufferPoolManager</code>包含<code>DiskManager</code>和<code>Replacer</code>对象。这是我们在系统的剩余部分需要实现的功能。<br>
-换句话说，你可能需要为这些类添加数据成员以正确实现所需功能。我们可以在这些类中添加额外的辅助函数。</p>
-<p>除非另有说明，我们可以在项目中使用任何内置的C++17容器。但是这些容器不是线程安全的，我们需要自己在实现中添加latch来保护。</p>
-<h2 id="task-1---lru-replacement-policy">TASK #1 - LRU REPLACEMENT POLICY</h2>
-<p>这个组件负责跟踪缓冲池中页面的使用情况。我们需要实现一个叫做<code>LRUReplacer</code>的新子类，它位于<code>src/include/buffer/lru_replacer.h</code>，相应的实现位于<code>src/buffer/lru_replacer.cpp</code>中。<code>LRUReplacer</code>继承于抽象<code>Replacer</code>类(<code>src/include/buffer/replacer.h</code>)，包含了指定的函数。</p>
-<p><code>LRUReplacer</code>的大小和缓冲池一样因为它为<code>BufferPoolManager</code>中的所有<code>frame</code>提供了占位符。然而，并非所有的<code>frames</code>都被视为<code>LRUReplacer</code>中的<code>frame</code>。<code>LRUReplacer</code>初始化时没有<code>frame</code>。然后，只有新的<code>unpinned</code>的那些才会被认为在<code>LRUReplacer</code>中。</p>
-<p>我们需要实现在课堂上讨论的LRU策略，需要实现下面的方法：</p>
+			<p>本次编程项目的是在我们的数据库系统中实现<strong>索引</strong>。索引负责快速检索数据，有了索引，我们就不必在数据库表中扫描每一行，索引为有序记录的快速随机查找和高校访问提供了保证。</p>
+<p>我们会实现<strong>B+树</strong>动态索引。B+树是一种自平衡树，它数据结构分为<code>内部结点</code>和<code>叶子节点</code>,叶子节点包含实际的数据项，而内部节点用来指导搜索，即提供一个路由的作用，指导我们应该前往哪个叶子节点搜索我们想要的数据项。</p>
+<p>因为树结构会动态的增长和收缩，我们需要处理逻辑上的<code>分裂</code>和<code>合并</code></p>
+<h2 id="task-4---concurrent-index">TASK #4 - CONCURRENT INDEX</h2>
+<p>我们需要更新原始的单线程B+树索引以至于我们可以支持并发操作。我们会使用<strong>latch crabbing technique(蟹行技术)</strong>，正在遍历索引的线程会在B+树页面上先获取锁然后释放它。一个线程<strong>仅</strong>在孩子页面被认为是<code>安全</code>的情况下才会释放父页面上的锁。<code>安全</code>的定义在不同的执行操作中是不同的。</p>
 <ul>
 <li>
-<p><code>Victim(T*)</code>: 移除相对于所有由<code>LRUReplacer</code>跟踪的最近最少访问的那些元素，在输出参数中存储它的内容并且返回<code>True</code>。如果<code>Replacer</code>为空则返回<code>False</code>。</p>
+<p><code>Search</code>: 从根节点开始，一旦到达孩子节点，拿到读锁之后就可以释放父节点上的读锁。</p>
 </li>
 <li>
-<p><code>Pin(T)</code>: 这个方法应该在<code>BufferPoolManager</code>中一个页面被固定到一个frame后调用。它应该从<code>LRUReplacer</code>中移除包含着<code>pinned</code>页的帧。</p>
+<p><code>Insert</code>: 从根节点开始，获取写锁，到达孩子节点，获取孩子节点上的写锁，如果孩子节点是<code>安全</code>的，这里安全指的是插入后不会分裂，那么才可以释放父节点上的写锁。如果孩子节点不安全就释放父节点上的锁，可能会造成两个线程同时对父节点进行写操作。</p>
 </li>
 <li>
-<p><code>Unpin(T)</code>: 这个方法应该在<code>pin_count</code>为0时调用。这个方法向<code>LRUReplacer</code>中添加包含着<code>unpinned</code>页的frame。</p>
+<p><code>Delete</code>: 从根节点开始，获取写锁，到达孩子节点，获取孩子节点上的写锁，如果孩子节点是<code>安全</code>的，这里安全指的是删除后不会造成<code>redistribution</code>和<code>coelesc</code>操作，也就是说至少超过半满，才可以释放父节点上的写锁。</p>
 </li>
+</ul>
+<h3 id="requirements-and-hints">REQUIREMENTS AND HINTS</h3>
+<ul>
+<li>我们不允许使用全局锁来保护数据结构。换句话说，我们不应该锁住整个索引并且在完成操作的时候释放锁。</li>
+<li>助教已经提供了<code>read-write latch</code>(<code>src/include/common/rwlatch.h</code>)的实现，并且已经在<code>page</code>头文件(<code>src/include/storage/page/page.h</code>)下添加了申请和释放锁的辅助函数。</li>
+<li>助教不会在B+树索引中添加任何<strong>强制性</strong>接口。我们可以在实现中编写任何私有/辅助函数，只要保留所有原始的公共接口完整无损以进行测试即可。</li>
+<li>对于这个任务点，我们必须使用传入的称为<code>transaction</code>(<code>src/include/concurrency/transaction.h</code>)的参数指针。它提供了当遍历B+树时存储已经获得到锁的页面的函数以及存储在<code>Remove</code>操作期间已经删除的页面的函数。
+助教的建议是仔细阅读B+树中的<code>FindLeafPage</code>函数，我们可能想要修改先前的实现(我们可能需要修改这个函数的返回值)以及在这个指定的函数中添加<code>latch crabbing</code>的逻辑。</li>
+<li>在缓冲池中<code>FetchPage()</code>函数的返回值是一个指向<code>Page</code>(<code>stc/include/storage/page/page.h</code>)实例的指针。我们可以在<code>Page</code>上申请一个锁，但不能在B+树节点上申请锁。</li>
+</ul>
+<h3 id="common-pitfalls">COMMON PITFALLS</h3>
+<ul>
+<li>测试程序不会测试线程安全的叶节点扫描操作(并发的迭代器操作)。但是我们应该在不能申请到锁时抛出一个异常以避免死锁。</li>
+<li>仔细思考<code>page</code>类中的<code>Unlock()</code>方法和<code>buffer pool manager</code>类中的<code>UnpinPage(page_id, is_dirty)</code>方法之间的顺序和关系。在<code>unpin</code>同样的页面之前必须释放掉获取的锁。</li>
+<li>如果正确地实现了并发B+树索引，那么每个线程<code>总是</code>可以获取从根节点到底部叶子节点的锁。当释放锁时，必须按获取锁的同样的顺序(从根节点到底部)释放锁，这样才能避免死锁。</li>
+<li>一个需要注意的边界情况是当插入和删除时，成员变量<code>root_page_id</code>也可能会被更新。我们需要负责保护它防止并发更新。(提示：可以添加一个抽象层，使用<code>std::mutex</code>来保护变量)</li>
+</ul>
+<h2 id="implementation">Implementation</h2>
+<p>提一下实现过程中遇到的难点以及是如何解决的。</p>
+<ol>
 <li>
-<p><code>Size()</code>: 这个方法返回当前处于<code>LRUReplacer</code>中的frame数目。</p>
-</li>
-</ul>
-<p>我们可以自由选择STL容器，我们可以假设不会超过内存但<strong>必须确保操作是线程安全</strong>的。</p>
-<h4 id="implementation-details">Implementation Details</h4>
-<ul>
-<li>什么是<code>frame</code>，什么是<code>page</code>？它们有什么关系？<br>
-内存区域可以看成是一个固定大小的<code>page</code>数组。我们把数组的每一项都叫做<code>frame</code>：页框。<br>
-而磁盘上的被划分为固定大小单元来组织，这个单元叫做<code>page</code>：页面。<br>
-当DBMS请求磁盘上的一个页面时，这个<code>page</code>就会被精确拷贝到一个<code>frame</code>中。具体拷贝到哪个<code>frame</code>视情况而定，而不是按照顺序。page id为1的<code>page</code>不一定拷贝到frame id为1的<code>frame</code>。</li>
-</ul>
-<h4 id="implementation-issue">Implementation Issue</h4>
-<p>整体思路就是就是<code>双链表</code> + <code>hash</code>.KV对就是&lt;frame_id_t, DLinkedNode&gt;，链表结点中存储的值是key。也就是说，key和value是相等的，不过为了换取更高的访问速度，所以选择用双链表结点进行封装。</p>
-<p>但是实现时还是会有一些问题：</p>
-<ul>
-<li><code>frame</code>的<code>unpinned</code>和<code>pinned</code>状态代表什么？</li>
-</ul>
-<p>一个<code>frame</code>状态为<code>unpinned</code>代表这个<code>frame</code>目前没有被任何一个thread所读写，<code>pinned</code>代表这个<code>frame</code>目前至少被一个thread所读写。</p>
-<ul>
-<li>为什么LRUReplacer提供的接口和OJ上的接口区别那么大？</li>
-</ul>
-<p>LRUReplacer追踪的是最近被访问过的<code>frame</code>。数据库中的LRU和OJ上的LRU所要考虑的有些不同，OJ上的LRU提供了两个接口<code>ValueType get(KeyType key)</code>和<code>void put(KeyType key, ValueType value)</code>。
-为什么项目中没有这两个接口？虽然我们有<code>Victim(T*)</code>，能拿到最近最少访问的frame并从LRU中evict掉，为什么不能get到其他frame？这是因为在数据库中我们需要考虑<code>Temporal Locality</code>，相对于其他
-<code>frame</code>，最近最少访问的<code>frame</code>将来很大概率不会被再次访问，所以我们可以evict掉。而其他<code>frame</code>因为<code>Temporal Locality</code>可能很快会被再次访问。</p>
-<ul>
-<li>为什么<code>Pin(T)</code>要从<code>LRUReplacer</code>中移除<code>pinned</code>状态的<code>frame</code>？</li>
-</ul>
-<p>当一个<code>frame</code>为<code>pinned</code>时，说明这页<code>frame</code>上的<code>page</code>正在被某一个线程所读写，此时它的<code>pin_count</code>一定大于0，我们需要在线程结束使用它后，将这页<code>frame</code>加入到LRU中，因为它刚刚被某一线程所读写。</p>
-<p>但是我们无法在<code>Pin(T)</code>函数中判断这页<code>frame</code>是否已经结束使用，所以我们得先把它从LRUReplacer中移除，随后<code>frame</code>结束使用的时候<code>一定会</code>调用<code>Unpin(T)</code>，这时候我们再把它加入到<code>LRUReplacer</code>中。
-这就是为什么我们还需要<code>Unpin(T)</code>函数的原因。这相当于OJ上LRU的<code>put(KeyType key, ValueType value)</code>中key已经存在的情况，而我们需要对<code>value</code>进行一个update操作，这个操作就相当于(1)在LRU中把这
-个元素移除，然后update它的value，(2)更新结束(线程不再读写这个结点)，然后加入到LRU中。OJ上的LRU并不是<code>thread-safe</code>的，单线程说明我们可以直接在LRU中更新对应结点的值，只在<code>put()</code>中就可以单独实现。
-但在实际数据库系统中不可以这样，因为会涉及到多个线程并发读写某一页<code>frame</code>的情况，如果写在一个<code>put</code>中，首先会增加了耦合性，LRU和其他模块应该尽可能地独立，其次也不好保护临界区地访问。</p>
-<p>所以说，将<code>put()</code>拆成<code>Pin()</code>和<code>Unpin()</code>其实是一个十分良好的设计。</p>
-<ul>
-<li>为什么<code>Unpin(T)</code>需要向LRU中添加<code>unpinned</code>页的<code>frame</code>？</li>
-</ul>
-<p>具体看上条。</p>
-<ul>
-<li>在<code>Unpin(T)</code>中为什么LRU中已经存在<code>frame</code>时，什么都不用做直接返回，而不是添加到LRU尾部，表示最近被访问？</li>
-</ul>
-<p>因为在LRU中的<code>frame</code>表示之前已经被线程访问过了，并且到目前操作为止都没有被线程访问过，因为如果需要被线程读写，一定会被evict掉。所以frame没有最近被再次访问，更不用说什么添加到链表尾部。</p>
-<h4 id="内存泄漏">内存泄漏</h4>
-<p>我们知道在CPP中手动管理内存是十分危险的，如果使用了<code>new</code>关键字，一定需要和一个<code>delete</code>关键字匹配，如果没有可能会发生内存泄漏。</p>
-<p>在<code>Unpin()</code>函数中，我们需要向<code>LRURepalcer</code>添加一个结点，会涉及到<code>new</code>关键字，那么什么时候需要delete呢？就是我们在调用<code>Pin()</code>函数的时候，我们需要在<code>LRUReplacer</code>中移除一个结点的时候使用<code>delete</code>关键字
-释放不用的内存。</p>
-<p><strong>改进</strong> 使用智能指针而不是原始指针可以避免这种pitfalls。</p>
-<h2 id="task-2---buffer-pool-manager">TASK #2 - Buffer Pool Manager</h2>
-<h4 id="开发中遇到的问题">开发中遇到的问题</h4>
-<ul>
-<li>在autograde上遇到了memory safety问题：</li>
-</ul>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
-Expected equality of these values:
-  <span style="color:#ae81ff">1</span>
-  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
-    Which is: false
-</code></pre></div><p>这问题其实出在<code>UnpinPageImpl(page_id_t page_id, bool is_dirty)</code>中:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++">  replacer_<span style="color:#f92672">-&gt;</span>Unpin(target_frame_id);
-  <span style="color:#66d9ef">if</span> (p<span style="color:#f92672">-&gt;</span>GetPinCount() <span style="color:#f92672">&lt;=</span> <span style="color:#ae81ff">0</span>) {
-    <span style="color:#66d9ef">return</span> false;
+<p>如何保证根节点不被并发写是安全的？当前实现的代码如下：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++">INDEX_TEMPLATE_ARGUMENTS
+<span style="color:#66d9ef">bool</span> BPLUSTREE_TYPE<span style="color:#f92672">::</span>Insert(<span style="color:#66d9ef">const</span> KeyType <span style="color:#f92672">&amp;</span>key, <span style="color:#66d9ef">const</span> ValueType <span style="color:#f92672">&amp;</span>value, Transaction <span style="color:#f92672">*</span>transaction) {
+  <span style="color:#66d9ef">bool</span> ret <span style="color:#f92672">=</span> true;
+  <span style="color:#66d9ef">if</span> (IsEmpty()) {
+      StartNewTree(key, value);
+      <span style="color:#66d9ef">return</span> true;
   }
-</code></pre></div><p>这样写其实是有问题了，如果page本身的pin_count小于等于0，那么unpin后，它就会等于-1,这是未定义的行为，我们需要交换下这两个语句的顺序。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++">  <span style="color:#75715e">// before unpin the frame, checkout the pin count first.
-</span><span style="color:#75715e"></span>  <span style="color:#66d9ef">if</span> (p<span style="color:#f92672">-&gt;</span>GetPinCount() <span style="color:#f92672">&lt;=</span> <span style="color:#ae81ff">0</span>) {
-    <span style="color:#66d9ef">return</span> false;
-  }
-  <span style="color:#75715e">// then we could Unpin the frame
-</span><span style="color:#75715e"></span>  replacer_<span style="color:#f92672">-&gt;</span>Unpin(target_frame_id);
-</code></pre></div><ul>
-<li>在project2中的<code>BufferPoolManagerConcurrencyTest</code>中遇到了内存安全问题.</li>
-</ul>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
-Expected equality of these values:
-  <span style="color:#ae81ff">1</span>
-  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
-    Which is: false
-/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:311: Failure
-Expected equality of these values:
-  <span style="color:#ae81ff">1</span>
-  bpm-&gt;UnpinPage<span style="color:#f92672">(</span>page_ids<span style="color:#f92672">[</span>j<span style="color:#f92672">]</span>, false, nullptr<span style="color:#f92672">)</span>
-    Which is: false
-/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
-Expected equality of these values:
-  <span style="color:#ae81ff">1</span>
-  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
-    Which is: false
-/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:300: Failure
-Expected equality of these values:
-  <span style="color:#ae81ff">1</span>
-  bpm-&gt;DeletePage<span style="color:#f92672">(</span>temp_page_id, nullptr<span style="color:#f92672">)</span>
-    Which is: false
-/autograder/bustub/test/buffer/grading_buffer_pool_manager_concurrency_test.cpp:311: Failure
-Expected equality of these values:
-  <span style="color:#ae81ff">1</span>
-  bpm-&gt;UnpinPage<span style="color:#f92672">(</span>page_ids<span style="color:#f92672">[</span>j<span style="color:#f92672">]</span>, false, nullptr<span style="color:#f92672">)</span>
-    Which is: false
-</code></pre></div><p>由于报错发生在<code>DeleltePageImplt()</code>和<code>UnpinPageImpl()</code>，而且在调用<code>DeletePageImpl()</code>之前会先调用<code>UnpinPageImpl()</code>，所以先去查看<code>UnpinPageImpl()</code>实现有没有问题。</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++">p<span style="color:#f92672">-&gt;</span>pin_count <span style="color:#f92672">-=</span> <span style="color:#ae81ff">1</span>;
-replacer<span style="color:#f92672">-&gt;</span>Unpin(target_frame_id);
-</code></pre></div><p>发现问题在这，由于可能存在多个线程并发访问page，我们不能直接调用<code>replacer-&gt;Unpin()</code>,因为可能还存在别的线程正在使用这个page，所以当不存在任何一个线程使用这个page的时候，即引用计数为0时，我们才能调用<code>replacer-&gt;Unpin()</code></p>
-<ul>
-<li>何时调用<code>replacer-&gt;Pin()</code>?<br>
-我理解应该在两处调用<code>repalcer-&gt;Pin()</code>，一处是<code>FetchPageImpl()</code>，另一处是<code>NewPageImpl()</code>。<br>
-1、调用<code>FetchPageImpl()</code>，代表至少有一个线程要使用目标页面，那么目标页面所在的frame必须被钉住，状态改变为<code>pinned</code>,并且从replacer中移除。<br>
-2、调用<code>NewPageImpl()</code>同理。</li>
-</ul>
+  ret <span style="color:#f92672">=</span> InsertIntoLeaf(key, value, transaction);
+  <span style="color:#66d9ef">return</span> ret;
+}
+</code></pre></div><p>思考一下，当前B+树还没有创建，这是有两个线程同时执行了<code>Insert</code>操作，这时候就会同时创建一个新的B+树，这显然是我们不希望看到的，我们希望看到的是两个线程的插入操作都会成功，B+树中有两个key，而不是一个key。</p>
+<p>我们显然不像能这样在判断分支之前加锁：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++">std<span style="color:#f92672">::</span>lock_gaurd<span style="color:#f92672">&lt;</span>std<span style="color:#f92672">::</span>mutex<span style="color:#f92672">&gt;</span> gd{mutex_};
+<span style="color:#66d9ef">if</span> (IsEmpty()) {
+</code></pre></div><p>因为这样会导致整个B+树被锁住，每次只能允许一个线程进行插入操作，这样效率很极低，我们只希望<strong>多个线程不要同时对同一个叶子节点进行写操作</strong>。</p>
+<p>我们需要一个双重检查来保证不能两个线程同时执行<code>StartNewTree</code>函数：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++"><span style="color:#66d9ef">if</span> (IsEmpty()) {
+    std<span style="color:#f92672">::</span>lock_gaurd<span style="color:#f92672">&lt;</span>std<span style="color:#f92672">::</span>mutex<span style="color:#f92672">&gt;</span> lg{mutex_};
+    <span style="color:#66d9ef">if</span> (IsEmpty()) {
+        StartNewTree(key, value);
+        <span style="color:#66d9ef">return</span> true;
+    }
+}
+ret <span style="color:#f92672">=</span> InsertIntoLeaf(key, value, transaction);
+</code></pre></div></li>
+<li>
+<p>我们解决了两个线程同时创建B+树的问题，但并没有保护根节点标识符<code>root_page_id</code>的并发访问，我的实现中判断B+树是否为空的函数实现如下：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++">INDEX_TEMPLATE_ARGUMENTS
+<span style="color:#66d9ef">bool</span> BPLUSTREE_TYPE<span style="color:#f92672">::</span>IsEmpty() <span style="color:#66d9ef">const</span> { <span style="color:#66d9ef">return</span> root_page_id_ <span style="color:#f92672">==</span> INVALID_PAGE_ID; }
+</code></pre></div><p>思考一下如下情形：此时有两个线程t1和t2, t1向B+树插入key：1， t2向B+树插入key：2。t1从磁盘获取一个新的页面，更新了根节点的id，但还没有插入key：1，而此时t2先访问了根节点页面，拿到了写锁，并插入key: 2，此时t1就无法插入key：1了，所以只有在t2完成插入后t1才能拿到根节点上的写锁，插入key：1，这样显然违反了串行化。这里先提供一种方法：利用一个单独的根节点锁来保护根节点，防止根节点分裂而造成的根节点更换。最后操作完成后再释放根节点锁。</p>
+</li>
+<li>
+<p>其实问题2中，有更好的解决方案而不需要使用额外的根节点锁，那就是使用<code>虚拟根节点页面(哑根节点页面)</code>。这样子根节点的行为就与所有的孩子节点行为一致，又保护了根节点，防止多个节点同时对根节点进行操作。具体的操作如下：每次插入操作时，先锁住虚拟根节点页面，加入到事务的页面集合中，需要提一下的是，虚拟根节点页面其实是一个<code>Page</code>类的实例，所以我们可以直接利用<code>Page</code>类中提供的读写锁方法，然后再根据key用latch crabbing寻找目标叶子节点。最后还需要提一下，<del>当返回时仍需判断页面是否为空，如果为空说明B+树为空，仍需要取得根节点上的锁，进行创建B+树</del>, 在调用创建B+树的函数前对虚拟根节点上锁，创建后释放虚拟根节点页面上的锁，这样可以保证永远先创建B+树，再插入节点，而不会造成在插入节点的时候发现B+树为空的情况，因为我们先判断的<code>if (IsEmpty())</code>.这样能保证创建B+树的线程先获取虚拟根节点上的锁。</p>
+</li>
+<li>
+<p>虽然<code>latch crabbing</code>技术可以保证B+树索引支持并发访问，但是并不是一个高效的选择，因为B+树的节点通常很大，发生分裂、合并的频率较小，其实可以采用乐观加锁的机制，从虚拟根节点开始，对于叶子节点获取正确的锁(写锁)，而父节点只获取读锁，如果目标叶子节点会发生分裂或者合并，即不是安全的，说明判断错误，需要重新走一遍<code>latch crabbing</code>，这样基于乐观加锁的机制可以较好的改善性能问题。</p>
+</li>
+<li>
+<p>最后提一下，C++11中的<code>std::move</code>和<code>std::move_backward</code>函数，它们可以用来**&ldquo;优雅的&rdquo;**移动容器元素, 但是函数定义的第三个参数<code>result</code>，不能位于前两个参数的区间之内。</p>
+<p>e.g. 在数组中插入一个元素:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++"><span style="color:#66d9ef">int</span> array[<span style="color:#ae81ff">5</span>] <span style="color:#f92672">=</span> {<span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">2</span>, <span style="color:#ae81ff">3</span>, <span style="color:#ae81ff">4</span>, <span style="color:#ae81ff">5</span>};
+<span style="color:#66d9ef">int</span> n <span style="color:#f92672">=</span> <span style="color:#66d9ef">sizeof</span>(array) <span style="color:#f92672">/</span> <span style="color:#66d9ef">sizeof</span> (<span style="color:#66d9ef">int</span>);
+<span style="color:#66d9ef">int</span> insert_idx <span style="color:#f92672">=</span> <span style="color:#ae81ff">2</span>;
+<span style="color:#66d9ef">int</span> val <span style="color:#f92672">=</span> <span style="color:#ae81ff">100</span>;
+std<span style="color:#f92672">::</span>move_backward(array <span style="color:#f92672">+</span> insert_idx, array <span style="color:#f92672">+</span> n, array <span style="color:#f92672">+</span> n <span style="color:#f92672">+</span> <span style="color:#ae81ff">1</span>);
+array[insert_idx] <span style="color:#f92672">=</span> val;
+</code></pre></div><p>e.g. 在数组中删除一个元素：</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c++" data-lang="c++"><span style="color:#66d9ef">int</span> array[<span style="color:#ae81ff">5</span>] <span style="color:#f92672">=</span> {<span style="color:#ae81ff">1</span>, <span style="color:#ae81ff">2</span>, <span style="color:#ae81ff">3</span>, <span style="color:#ae81ff">4</span>, <span style="color:#ae81ff">5</span>};
+<span style="color:#66d9ef">int</span> n <span style="color:#f92672">=</span> <span style="color:#66d9ef">sizeof</span>(array) <span style="color:#f92672">/</span> <span style="color:#66d9ef">sizeof</span>(<span style="color:#66d9ef">int</span>);
+<span style="color:#66d9ef">int</span> remove_idx <span style="color:#f92672">=</span> <span style="color:#ae81ff">2</span>;
+std<span style="color:#f92672">::</span>move(array <span style="color:#f92672">+</span> remove_idx <span style="color:#f92672">+</span> <span style="color:#ae81ff">1</span>, array <span style="color:#f92672">+</span> n, array <span style="color:#f92672">+</span> remove_idx);
+resize(n <span style="color:#f92672">-</span> <span style="color:#ae81ff">1</span>); <span style="color:#75715e">// 一个伪操作，数组需要手动将size - 1
+</span></code></pre></div></li>
+</ol>
 		</section>
 
 		<div class="post-tags">

@@ -6,13 +6,23 @@
     <description>Recent content on Jerry Ray</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <copyright>© Song Rui</copyright><atom:link href="https://songrui625.github.io/index.xml" rel="self" type="application/rss+xml" />
+    <copyright>© Song Rui</copyright>
+    <lastBuildDate>Tue, 18 May 2021 13:31:42 +0800</lastBuildDate><atom:link href="https://songrui625.github.io/index.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>15-445-lab2:Buffer Pool Manager</title>
+      <title>15-445-lab2:B&#43; Tree</title>
       <link>https://songrui625.github.io/posts/15-445-lab2/</link>
-      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      <pubDate>Tue, 18 May 2021 13:31:42 +0800</pubDate>
       
       <guid>https://songrui625.github.io/posts/15-445-lab2/</guid>
+      <description>&lt;p&gt;本次编程项目的是在我们的数据库系统中实现&lt;strong&gt;索引&lt;/strong&gt;。索引负责快速检索数据，有了索引，我们就不必在数据库表中扫描每一行，索引为有序记录的快速随机查找和高校访问提供了保证。&lt;/p&gt;</description>
+    </item>
+    
+    <item>
+      <title>15-445-lab1:Buffer Pool Manager</title>
+      <link>https://songrui625.github.io/posts/15-445-lab1/</link>
+      <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>
+      
+      <guid>https://songrui625.github.io/posts/15-445-lab1/</guid>
       <description>&lt;p&gt;这个项目的目标是为&lt;a href=&#34;https://github.com/cmu-db/bustub&#34;&gt;BusTub&lt;/a&gt;DBMS构建一个面向磁盘的存储引擎。存储引擎假设数据库的基本存储位置位于磁盘上。&lt;/p&gt;</description>
     </item>
     
